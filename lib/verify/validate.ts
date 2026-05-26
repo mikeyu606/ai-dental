@@ -1,23 +1,12 @@
+import { normalizeDateOfBirth } from "./parse-dob";
 import type { VerifyPatientInput } from "./types";
 
 const MAX_NAME_LENGTH = 120;
 const MAX_MEMBER_ID_LENGTH = 64;
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export type ParseResult =
   | { ok: true; data: VerifyPatientInput }
   | { ok: false; error: string };
-
-function isValidIsoDate(value: string): boolean {
-  if (!ISO_DATE_PATTERN.test(value)) return false;
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
-  );
-}
 
 export function parseVerifyPayload(body: unknown): ParseResult {
   if (body === null || typeof body !== "object") {
@@ -42,10 +31,12 @@ export function parseVerifyPayload(body: unknown): ParseResult {
   if (patientName.length > MAX_NAME_LENGTH) {
     return { ok: false, error: "Patient name is too long." };
   }
-  if (!dateOfBirth || !isValidIsoDate(dateOfBirth)) {
+  const normalizedDob = normalizeDateOfBirth(dateOfBirth);
+  if (!normalizedDob) {
     return {
       ok: false,
-      error: "Date of birth must be a valid ISO date (YYYY-MM-DD).",
+      error:
+        "Date of birth must be a valid date (MM/DD/YYYY or YYYY-MM-DD).",
     };
   }
   if (!memberId) {
@@ -72,7 +63,7 @@ export function parseVerifyPayload(body: unknown): ParseResult {
     ok: true,
     data: {
       patientName,
-      dateOfBirth,
+      dateOfBirth: normalizedDob,
       memberId,
       ...(patientStateRaw ? { patientState: patientStateRaw } : {}),
     },

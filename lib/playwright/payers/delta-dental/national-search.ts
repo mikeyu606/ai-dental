@@ -1,6 +1,13 @@
 import type { Page } from "playwright-core";
 
-import type { VerifyPatientInput } from "@/lib/verify/types";
+import type {
+  BenefitLevelRow,
+  DeductibleRow,
+  MaximumRow,
+  VerifyPatientInput,
+} from "@/lib/verify/types";
+
+import { scrapeEligibilityBenefits } from "./benefits-scrape";
 
 import {
   assertAuthenticatedProviderTools,
@@ -27,7 +34,15 @@ export type NationalSearchResult = {
   planName?: string;
   groupName?: string;
   memberId?: string;
+  memberType?: string;
+  dateOfBirth?: string;
+  groupNumber?: string;
   eligibilityPeriod?: string;
+  recordDate?: string;
+  provisions?: string[];
+  benefitLevels: BenefitLevelRow[];
+  maximums: MaximumRow[];
+  deductibles: DeductibleRow[];
 };
 
 async function isSearchFormVisible(page: Page): Promise<boolean> {
@@ -188,24 +203,49 @@ async function openEligibilityBenefits(page: Page): Promise<void> {
     .getByText(/benefits overview|eligibility & benefits/i)
     .first()
     .waitFor({ state: "visible", timeout: STEP_TIMEOUT_MS });
+
+  await page
+    .getByText(/member eligibility/i)
+    .first()
+    .waitFor({ state: "visible", timeout: STEP_TIMEOUT_MS })
+    .catch(() => undefined);
 }
 
-function extractField(text: string, label: string): string | undefined {
+function extractMultilineField(text: string, label: string): string | undefined {
   const pattern = new RegExp(
-    `${label}\\s*:?\\s*([^\\n]+)`,
+    `${label}\\s*:?\\s*\\n\\s*([^\\n]+)|${label}\\s*:?\\s*([^\\n]+)`,
     "i",
   );
-  return text.match(pattern)?.[1]?.trim();
+  const match = text.match(pattern);
+  return (match?.[1] ?? match?.[2])?.trim();
 }
 
-function parseEligibilityPage(text: string): Omit<NationalSearchResult, "coverageStatus"> {
+function parseEligibilityPage(
+  text: string,
+  scraped: Awaited<ReturnType<typeof scrapeEligibilityBenefits>>,
+): Omit<NationalSearchResult, "coverageStatus"> {
   return {
-    summaryText: text.slice(0, 4000),
-    patientName: extractField(text, "Patient name") ?? extractField(text, "Name"),
-    planName: extractField(text, "Plan"),
-    groupName: extractField(text, "Group"),
-    memberId: extractField(text, "Member ID"),
-    eligibilityPeriod: extractField(text, "Member eligibility"),
+    summaryText: text.slice(0, 8000),
+    patientName:
+      scraped.patientName ??
+      extractMultilineField(text, "Patient name") ??
+      extractMultilineField(text, "Name"),
+    planName: scraped.planName ?? extractMultilineField(text, "Plan"),
+    groupName: scraped.groupName ?? extractMultilineField(text, "Group"),
+    memberId: scraped.memberId ?? extractMultilineField(text, "Member ID"),
+    memberType: scraped.memberType ?? extractMultilineField(text, "Member type"),
+    dateOfBirth:
+      scraped.dateOfBirth ?? extractMultilineField(text, "Date of birth"),
+    groupNumber:
+      scraped.groupNumber ?? extractMultilineField(text, "Group number"),
+    eligibilityPeriod:
+      scraped.eligibilityPeriod ??
+      extractMultilineField(text, "Member eligibility"),
+    recordDate: scraped.recordDate,
+    provisions: scraped.provisions,
+    benefitLevels: scraped.benefitLevels,
+    maximums: scraped.maximums,
+    deductibles: scraped.deductibles,
   };
 }
 
@@ -278,7 +318,8 @@ export async function runNationalSearch(
     );
   }
 
-  const parsed = parseEligibilityPage(summaryText);
+  const scraped = await scrapeEligibilityBenefits(page);
+  const parsed = parseEligibilityPage(summaryText, scraped);
 
   return {
     ...parsed,

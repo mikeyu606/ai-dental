@@ -13,6 +13,31 @@ export type VerifyJobStatus =
   | "completed"
   | "failed";
 
+export type BenefitLevelRow = {
+  treatmentType: string;
+  ppoLevel?: string;
+  premierLevel?: string;
+  nonDeltaLevel?: string;
+};
+
+export type MaximumRow = {
+  type: string;
+  treatmentTypes?: string;
+  network?: string;
+  amount?: string;
+  used?: string;
+  remaining?: string;
+};
+
+export type DeductibleRow = {
+  type: string;
+  treatmentTypes?: string;
+  network?: string;
+  amount?: string;
+  used?: string;
+  remaining?: string;
+};
+
 export type EligibilitySnapshot = {
   payer: "delta_dental";
   source: "provider_tools_eligibility_benefits";
@@ -22,7 +47,15 @@ export type EligibilitySnapshot = {
   planName?: string;
   groupName?: string;
   memberId?: string;
+  memberType?: string;
+  dateOfBirth?: string;
+  groupNumber?: string;
   eligibilityPeriod?: string;
+  recordDate?: string;
+  provisions?: string[];
+  benefitLevels?: BenefitLevelRow[];
+  maximums?: MaximumRow[];
+  deductibles?: DeductibleRow[];
   /** Truncated benefits text for display — handle as PHI. */
   summaryExcerpt: string;
 };
