@@ -22,6 +22,7 @@
 
 # misc
 .DS_Store
+.delta-dental/
 *.pem
 
 # debug
